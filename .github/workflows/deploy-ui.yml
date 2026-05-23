@@ -1,0 +1,36 @@
+name: Deploy UI to CloudFront
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: false
+        default: ''
+        type: choice
+        options: ['', 'dev', 'prod']
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    environment: ${{ (inputs.environment != '' && inputs.environment) || (github.ref_name == 'main' && 'prod' || 'dev') }}
+    uses: ajnacloud-ksj/ajna-github-workflows/.github/workflows/reusable-static-site.yml@main
+    with:
+      aws-region: ${{ vars.AWS_REGION }}
+      s3-bucket: ${{ vars.S3_BUCKET }}
+      s3-path: ${{ vars.S3_PATH }}
+      working-directory: '.'
+      node-version: '20'
+      api-url: ${{ vars.API_URL }}
+      auth-mode: 'cognito'
+      user-pool-id: ${{ vars.COGNITO_USER_POOL_ID }}
+      user-pool-client-id: ${{ vars.COGNITO_CLIENT_ID }}
+      cognito-region: ${{ vars.AWS_REGION }}
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
