@@ -15,7 +15,12 @@ export const api = axios.create({
 
 function extractTenantFromHost(): string {
   const host = window.location.hostname.toLowerCase().split(":")[0]
-  if (host === "localhost" || host === "127.0.0.1") return ""
+  // Local dev has no tenant subdomain — fall back to an explicit VITE_TENANT_ID so the
+  // backend scopes to the intended tenant (mirrors production subdomain -> X-Tenant-ID),
+  // essential for multi-tenant users whose JWT would otherwise resolve arbitrarily.
+  if (host === "localhost" || host === "127.0.0.1") {
+    return (import.meta.env.VITE_TENANT_ID || "").toLowerCase().replace(/-/g, "_")
+  }
   const parts = host.split(".")
   if (parts.length < 3) return ""
   // Normalize to match IbexDB tenant ID convention (hyphens → underscores)
