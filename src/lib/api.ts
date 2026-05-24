@@ -14,16 +14,12 @@ export const api = axios.create({
 })
 
 function extractTenantFromHost(): string {
-  const host = window.location.hostname.toLowerCase().split(":")[0]
-  // Local dev has no tenant subdomain — fall back to an explicit VITE_TENANT_ID so the
-  // backend scopes to the intended tenant (mirrors production subdomain -> X-Tenant-ID),
-  // essential for multi-tenant users whose JWT would otherwise resolve arbitrarily.
-  if (host === "localhost" || host === "127.0.0.1") {
-    return (import.meta.env.VITE_TENANT_ID || "").toLowerCase().replace(/-/g, "_")
-  }
-  const parts = host.split(".")
+  // Tenant = first label of the host, everywhere the same:
+  //   acme.pharmaqr.triviz.cloud   -> "acme"  (production)
+  //   acme.pharmaqr.localhost:5173 -> "acme"  (local dev: *.localhost resolves to 127.0.0.1)
+  // No environment branches: local dev uses the same subdomain model as production.
+  const parts = window.location.hostname.toLowerCase().split(":")[0].split(".")
   if (parts.length < 3) return ""
-  // Normalize to match IbexDB tenant ID convention (hyphens → underscores)
   return parts[0].replace(/-/g, "_")
 }
 
