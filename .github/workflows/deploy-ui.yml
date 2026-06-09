@@ -4,24 +4,17 @@ on:
   push:
     branches: [main, develop]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Target environment'
-        required: false
-        default: ''
-        type: choice
-        options: ['', 'dev', 'prod']
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  # See deploy-backend.yml: `environment:` is illegal on a reusable-workflow caller job, so a normal
-  # `config` job carries the environment (scoping vars.* to dev/prod) and re-exports them as outputs.
+  # See deploy-backend.yml: a `uses:` job can't set `environment:`, and `environment:` must NOT
+  # reference inputs.* (null on push → GitHub rejects the workflow at startup). Branch derives the env.
   config:
     runs-on: ubuntu-latest
-    environment: ${{ (inputs.environment != '' && inputs.environment) || (github.ref_name == 'main' && 'prod' || 'dev') }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
     outputs:
       aws-region: ${{ vars.AWS_REGION }}
       s3-bucket: ${{ vars.S3_BUCKET }}
@@ -36,6 +29,8 @@ jobs:
 
   deploy:
     needs: config
+    # Skip (green) until provisioned — the first template push has no vars yet.
+    if: ${{ needs.config.outputs.s3-bucket != '' }}
     uses: ajnacloud-ksj/ajna-github-workflows/.github/workflows/reusable-static-site.yml@main
     with:
       aws-region: ${{ needs.config.outputs.aws-region }}
