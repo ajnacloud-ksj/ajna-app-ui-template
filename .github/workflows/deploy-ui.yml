@@ -17,20 +17,39 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  # See deploy-backend.yml: `environment:` is illegal on a reusable-workflow caller job, so a normal
+  # `config` job carries the environment (scoping vars.* to dev/prod) and re-exports them as outputs.
+  config:
+    runs-on: ubuntu-latest
     environment: ${{ (inputs.environment != '' && inputs.environment) || (github.ref_name == 'main' && 'prod' || 'dev') }}
-    uses: ajnacloud-ksj/ajna-github-workflows/.github/workflows/reusable-static-site.yml@main
-    with:
+    outputs:
       aws-region: ${{ vars.AWS_REGION }}
       s3-bucket: ${{ vars.S3_BUCKET }}
       s3-path: ${{ vars.S3_PATH }}
+      api-url: ${{ vars.API_URL }}
+      cognito-user-pool-id: ${{ vars.COGNITO_USER_POOL_ID }}
+      cognito-client-id: ${{ vars.COGNITO_CLIENT_ID }}
+      aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
+      cloudfront-distribution-id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+    steps:
+      - run: echo "Resolved UI environment variables"
+
+  deploy:
+    needs: config
+    uses: ajnacloud-ksj/ajna-github-workflows/.github/workflows/reusable-static-site.yml@main
+    with:
+      aws-region: ${{ needs.config.outputs.aws-region }}
+      s3-bucket: ${{ needs.config.outputs.s3-bucket }}
+      s3-path: ${{ needs.config.outputs.s3-path }}
       working-directory: '.'
       node-version: '20'
-      api-url: ${{ vars.API_URL }}
+      api-url: ${{ needs.config.outputs.api-url }}
       auth-mode: 'cognito'
-      user-pool-id: ${{ vars.COGNITO_USER_POOL_ID }}
-      user-pool-client-id: ${{ vars.COGNITO_CLIENT_ID }}
-      cognito-region: ${{ vars.AWS_REGION }}
+      user-pool-id: ${{ needs.config.outputs.cognito-user-pool-id }}
+      user-pool-client-id: ${{ needs.config.outputs.cognito-client-id }}
+      cognito-region: ${{ needs.config.outputs.aws-region }}
+    # The cockpit wires AWS_ROLE_ARN + CLOUDFRONT_DISTRIBUTION_ID as Actions VARS (not secrets), so
+    # source them from the config outputs and pass them into the reusable workflow's secret inputs.
     secrets:
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
-      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+      AWS_ROLE_ARN: ${{ needs.config.outputs.aws-role-arn }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ needs.config.outputs.cloudfront-distribution-id }}
