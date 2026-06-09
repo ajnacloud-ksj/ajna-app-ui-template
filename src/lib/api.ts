@@ -1,13 +1,20 @@
 import axios, { type AxiosError } from "axios"
 
 // Support both VITE_API_URL (deploy/static-site) and VITE_API_BASE (docker compose).
-const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE
+const API_HOST = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE
 
-if (!API_BASE) {
+if (!API_HOST) {
   throw new Error(
     "VITE_API_URL (or VITE_API_BASE) environment variable is missing!"
   )
 }
+
+// The Ajna API is versioned under /v1 (the SDK serves /v1/auth/login, /v1/{table}, …) and the
+// route paths in this app are bare (e.g. "/auth/login"), so the axios baseURL must carry the /v1
+// prefix. Normalise to EXACTLY one trailing /v1 — idempotent whether the injected host already
+// ends in /v1 or not — so the same code works against a bare host (https://api.example.com) and a
+// pre-suffixed one (https://api.example.com/v1) without producing /v1/v1.
+const API_BASE = `${String(API_HOST).replace(/\/+$/, '').replace(/\/v1$/, '')}/v1`
 
 export const api = axios.create({
   baseURL: API_BASE,
