@@ -19,9 +19,14 @@ import { useAuth } from "@/contexts/auth-context"
 import { loginSchema, type TLoginFormData } from "@/features/auth/schema"
 import {
   getCachedTenantConfig,
-  getTenantConfig,
-  type TenantConfig,
+  resolveTenant,
+  type TenantResolution,
 } from "@/features/tenant-config/api"
+import {
+  TenantDisabledPage,
+  TenantNotFoundPage,
+  TenantProvisioningPage,
+} from "@/pages/login/tenant-state"
 
 const APP_NAME = "{{app-name}}"
 
@@ -37,10 +42,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const slug = extractSlugFromHost()
-  const [branding, setBranding] = useState<TenantConfig | null>(() =>
-    slug ? getCachedTenantConfig(slug) : null
-  )
-  const [ready, setReady] = useState(!slug || branding !== null)
+  const [resolution, setResolution] = useState<TenantResolution | null>(() => {
+    const cached = slug ? getCachedTenantConfig(slug) : null
+    return cached ? { state: "ok", config: cached } : null
+  })
+  const [ready, setReady] = useState(!slug || resolution !== null)
 
   const form = useForm<TLoginFormData>({
     resolver: yupResolver(loginSchema) as any,
@@ -51,18 +57,54 @@ export default function LoginPage() {
   })
 
   useEffect(() => {
-    if (ready) return
-    getTenantConfig(slug).then((config) => {
-      if (config) setBranding(config)
+    if (!slug) return
+    resolveTenant(slug).then((result) => {
+      setResolution((prev) => {
+        // Fail open: never downgrade a working cached view on a transport blip.
+        if (result.state === "error" && prev?.state === "ok") return prev
+        return result
+      })
       setReady(true)
     })
-  }, [])
+  }, [slug])
+
+  const provisioning = resolution?.state === "not_ready"
+  useEffect(() => {
+    if (!provisioning) return
+    const id = window.setInterval(() => {
+      resolveTenant(slug).then((result) => {
+        // While provisioning, ignore transient lookup errors to avoid
+        // flip-flopping; adopt any definitive state (ok/unknown/disabled).
+        if (result.state !== "error") setResolution(result)
+      })
+    }, 5000)
+    return () => window.clearInterval(id)
+  }, [provisioning, slug])
 
   if (!ready) return null
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />
   }
+
+  if (resolution?.state === "unknown") {
+    return <TenantNotFoundPage />
+  }
+  if (resolution?.state === "not_ready") {
+    return <TenantProvisioningPage />
+  }
+  if (resolution?.state === "disabled") {
+    return (
+      <TenantDisabledPage
+        message={resolution.message}
+        branding={resolution.config}
+      />
+    )
+  }
+
+  // "ok" renders the branded login; "error" (or no slug) fails open to the
+  // default-branded login form — a tenant-lookup outage must never lock the door.
+  const branding = resolution?.state === "ok" ? resolution.config : null
 
   const displayName = branding?.display_name ?? APP_NAME
   const primaryColor = branding?.primary_color ?? null
