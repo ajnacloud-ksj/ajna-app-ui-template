@@ -3,11 +3,17 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   useMemo,
   type ReactNode,
 } from "react"
 import type { IUserInfo, ILoginResponse } from "@/features/auth/types"
 import { loginApi } from "@/features/auth/api"
+import {
+  hostedLogoutRedirect,
+  isHostedAuthEnabled,
+  scheduleHostedTokenRefresh,
+} from "@/lib/hosted-auth"
 
 export interface IAuthContextValue {
   user: IUserInfo | null
@@ -70,7 +76,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem("active_tenant")
     setToken(null)
     setUser(null)
+    if (isHostedAuthEnabled()) {
+      // Kill the central Managed Login session too (clears hosted tokens
+      // then redirects to /oauth2/logout).
+      hostedLogoutRedirect()
+    }
   }, [])
+
+  // Hosted auth only: proactively renew the access token before it expires.
+  // No-op when VITE_AUTH_DOMAIN is not configured.
+  useEffect(() => {
+    if (isHostedAuthEnabled() && token) {
+      scheduleHostedTokenRefresh()
+    }
+  }, [token])
 
   const value = useMemo<IAuthContextValue>(
     () => ({

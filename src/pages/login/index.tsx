@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/form"
 import { useAuth } from "@/contexts/auth-context"
 import { loginSchema, type TLoginFormData } from "@/features/auth/schema"
+import { beginHostedLogin, isHostedAuthEnabled } from "@/lib/hosted-auth"
 import {
   getCachedTenantConfig,
   resolveTenant,
@@ -67,6 +68,26 @@ export default function LoginPage() {
       setReady(true)
     })
   }, [slug])
+
+  // Hosted auth (VITE_AUTH_DOMAIN set): the login experience is a redirect to
+  // the central hosted UI instead of the password form. Only redirect once the
+  // tenant is resolved to a loginable state.
+  const hostedAuth = isHostedAuthEnabled()
+  const canLogin =
+    ready &&
+    !isAuthenticated &&
+    resolution?.state !== "unknown" &&
+    resolution?.state !== "not_ready" &&
+    resolution?.state !== "disabled"
+  useEffect(() => {
+    if (!hostedAuth || !canLogin) return
+    beginHostedLogin().catch((err) => {
+      const msg =
+        err instanceof Error ? err.message : "Could not start sign-in."
+      setError(msg)
+      toast.error(msg)
+    })
+  }, [hostedAuth, canLogin])
 
   const provisioning = resolution?.state === "not_ready"
   useEffect(() => {
@@ -254,76 +275,107 @@ export default function LoginPage() {
             </div>
           )}
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <FormLabel className="text-sm font-semibold text-foreground">
-                      Username / Email
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type="text"
-                        placeholder="Enter your username or email"
-                        disabled={loading}
-                        className="h-11"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage className="text-xs font-medium text-destructive" />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <FormLabel className="text-sm font-semibold text-foreground">
-                        Password
-                      </FormLabel>
-                      <a
-                        href="#"
-                        className="text-xs text-muted-foreground transition-colors hover:text-primary"
-                      >
-                        Forgot password?
-                      </a>
-                    </div>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="••••••••"
-                        disabled={loading}
-                        className="h-11"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage className="text-xs font-medium text-destructive" />
-                  </FormItem>
-                )}
-              />
-
+          {hostedAuth ? (
+            <div className="space-y-5">
+              {!error && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Redirecting to secure sign-in…</span>
+                </div>
+              )}
               <Button
-                type="submit"
+                type="button"
                 className="h-11 w-full text-sm font-semibold"
-                disabled={loading}
+                onClick={() => {
+                  setError(null)
+                  beginHostedLogin().catch((err) => {
+                    const msg =
+                      err instanceof Error
+                        ? err.message
+                        : "Could not start sign-in."
+                    setError(msg)
+                    toast.error(msg)
+                  })
+                }}
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  "Sign in"
-                )}
+                Continue to sign in
               </Button>
-            </form>
-          </Form>
+            </div>
+          ) : (
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-5"
+              >
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem className="space-y-2">
+                      <FormLabel className="text-sm font-semibold text-foreground">
+                        Username / Email
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="text"
+                          placeholder="Enter your username or email"
+                          disabled={loading}
+                          className="h-11"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-xs font-medium text-destructive" />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <FormLabel className="text-sm font-semibold text-foreground">
+                          Password
+                        </FormLabel>
+                        <a
+                          href="#"
+                          className="text-xs text-muted-foreground transition-colors hover:text-primary"
+                        >
+                          Forgot password?
+                        </a>
+                      </div>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder="••••••••"
+                          disabled={loading}
+                          className="h-11"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-xs font-medium text-destructive" />
+                    </FormItem>
+                  )}
+                />
+
+                <Button
+                  type="submit"
+                  className="h-11 w-full text-sm font-semibold"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    "Sign in"
+                  )}
+                </Button>
+              </form>
+            </Form>
+          )}
 
           <p className="pt-4 text-center text-xs text-muted-foreground">
             Built on the Ajna platform

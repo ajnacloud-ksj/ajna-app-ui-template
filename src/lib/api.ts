@@ -1,4 +1,6 @@
-import axios, { type AxiosError } from "axios"
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios"
+
+import { isHostedAuthEnabled, refreshHostedTokens } from "@/lib/hosted-auth"
 
 // Support both VITE_API_URL (deploy/static-site) and VITE_API_BASE (docker compose).
 const API_HOST = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE
@@ -14,7 +16,7 @@ if (!API_HOST) {
 // prefix. Normalise to EXACTLY one trailing /v1 — idempotent whether the injected host already
 // ends in /v1 or not — so the same code works against a bare host (https://api.example.com) and a
 // pre-suffixed one (https://api.example.com/v1) without producing /v1/v1.
-const API_BASE = `${String(API_HOST).replace(/\/+$/, '').replace(/\/v1$/, '')}/v1`
+const API_BASE = `${String(API_HOST).replace(/\/+$/, "").replace(/\/v1$/, "")}/v1`
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -57,8 +59,26 @@ const USER_FACING_ERRORS: Record<number, string> = {
 
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ error?: string; detail?: string }>) => {
+  async (error: AxiosError<{ error?: string; detail?: string }>) => {
     const status = error.response?.status
+
+    // Hosted auth only: on a 401, attempt one silent token refresh and replay
+    // the request. Inert when VITE_AUTH_DOMAIN is not configured.
+    const original = error.config as
+      | (InternalAxiosRequestConfig & { _hostedAuthRetried?: boolean })
+      | undefined
+    if (
+      status === 401 &&
+      isHostedAuthEnabled() &&
+      original &&
+      !original._hostedAuthRetried
+    ) {
+      original._hostedAuthRetried = true
+      const refreshed = await refreshHostedTokens()
+      if (refreshed) {
+        return api(original)
+      }
+    }
     const serverMessage =
       error.response?.data?.error || error.response?.data?.detail
 
