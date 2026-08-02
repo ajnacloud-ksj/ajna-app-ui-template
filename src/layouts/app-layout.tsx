@@ -1,3 +1,4 @@
+import AppSwitcher from "@/components/app-switcher"
 import { useAuth } from "@/contexts/auth-context"
 import { usePermissions } from "@/contexts/permissions-context"
 import { useTheme } from "@/contexts/theme-provider"
@@ -336,6 +337,7 @@ export default function AppLayout() {
 
           {/* Right: Actions */}
           <div className="flex items-center gap-1">
+            <AppSwitcher />
             <button
               onClick={toggleTheme}
               className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
