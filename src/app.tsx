@@ -13,6 +13,7 @@ import QueryProvider from "@/contexts/query-provider"
 import { ThemeProvider } from "@/contexts/theme-provider"
 import AppLayout from "@/layouts/app-layout"
 import LoginPage from "@/pages/login"
+import AuthCallbackPage from "@/pages/auth-callback"
 import Dashboard from "@/pages/dashboard"
 import NotFoundPage from "@/pages/not-found"
 import ItemListPage from "@/pages/items"
@@ -52,6 +53,9 @@ function AllRoutes() {
         <Route path="field-config" element={<FieldConfigPage />} />
         <Route path="role-permissions" element={<RolePermissionsPage />} />
       </Route>
+
+      {/* Hosted-auth (PKCE) callback — reachable regardless of auth state */}
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
       {/* ── Auth ── */}
       <Route
