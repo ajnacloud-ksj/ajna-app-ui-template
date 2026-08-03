@@ -323,7 +323,7 @@ export function scheduleHostedTokenRefresh(): void {
 // ─── Logout ──────────────────────────────────────────────────────────────────
 
 /**
- * Clear hosted-auth tokens and redirect to the central /oauth2/logout so the
+ * Clear hosted-auth tokens and redirect to the central /logout so the
  * Managed Login session dies too. The caller (auth-context) clears
  * auth_token / auth_user itself.
  */
@@ -338,5 +338,5 @@ export function hostedLogoutRedirect(): void {
     client_id: CLIENT_ID,
     logout_uri: `${window.location.origin}/`,
   })
-  window.location.assign(`https://${AUTH_DOMAIN}/oauth2/logout?${params}`)
+  window.location.assign(`https://${AUTH_DOMAIN}/logout?${params}`)
 }
