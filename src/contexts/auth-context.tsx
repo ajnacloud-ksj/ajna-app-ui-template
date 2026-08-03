@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     if (isHostedAuthEnabled()) {
       // Kill the central Managed Login session too (clears hosted tokens
-      // then redirects to /oauth2/logout).
+      // then redirects to /logout).
       hostedLogoutRedirect()
     }
   }, [])
