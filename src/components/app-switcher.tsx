@@ -29,8 +29,13 @@ export function resolvePortalUrl(
     if (host) return `https://${host}`
   }
   const host = hostname.toLowerCase().split(":")[0]
-  const zone = host.split(".").slice(1).join(".")
-  if (!zone || !zone.includes(".")) return `https://${FALLBACK_PORTAL_HOST}`
+  const labels = host.split(".")
+  // Known platform zones are 2-label (triviz.cloud / ajna.cloud):
+  //   {tenant}.{app}.{zone} (4 labels) -> the ORG door {tenant}.{zone}
+  //   {app}.{zone}          (3 labels) -> the central portal portal.{zone}
+  if (labels.length < 3) return `https://${FALLBACK_PORTAL_HOST}`
+  const zone = labels.slice(-2).join(".")
+  if (labels.length >= 4) return `https://${labels[0]}.${zone}`
   return `https://portal.${zone}`
 }
 
