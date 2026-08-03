@@ -31,6 +31,16 @@ import {
 
 const APP_NAME = "{{app-name}}"
 
+// Portal-originated arrivals carry ?sso=1: the login page then auto-starts the
+// hosted sign-in (same call as the button) instead of waiting for a click.
+// One attempt per arrival — the sessionStorage flag stops an error bounce-back
+// from looping. Direct visits (no ?sso=1) keep the click-to-sign-in behavior.
+const SSO_AUTO_TRIED_KEY = "hosted_auth_auto_tried"
+
+function isSsoAutoStartRequested(): boolean {
+  return new URLSearchParams(window.location.search).get("sso") === "1"
+}
+
 function extractSlugFromHost(): string {
   const host = window.location.hostname.toLowerCase()
   if (host === "localhost" || host === "127.0.0.1") return ""
@@ -69,10 +79,13 @@ export default function LoginPage() {
     })
   }, [slug])
 
-  // Hosted auth (VITE_AUTH_DOMAIN set): the login experience is a redirect to
-  // the central hosted UI instead of the password form. Only redirect once the
-  // tenant is resolved to a loginable state.
+  // Hosted auth (VITE_AUTH_DOMAIN set): portal-originated arrivals (?sso=1)
+  // auto-start the hosted sign-in redirect — but only once the tenant is
+  // resolved to a loginable state, and at most once per arrival. Direct
+  // visits render the page and wait for the button click.
   const hostedAuth = isHostedAuthEnabled()
+  const ssoRequested = isSsoAutoStartRequested()
+  const [autoStarting, setAutoStarting] = useState(false)
   const canLogin =
     ready &&
     !isAuthenticated &&
@@ -80,14 +93,23 @@ export default function LoginPage() {
     resolution?.state !== "not_ready" &&
     resolution?.state !== "disabled"
   useEffect(() => {
+    if (!ssoRequested) {
+      // Direct visit: re-arm the one-shot guard for a future portal arrival.
+      sessionStorage.removeItem(SSO_AUTO_TRIED_KEY)
+      return
+    }
     if (!hostedAuth || !canLogin) return
+    if (sessionStorage.getItem(SSO_AUTO_TRIED_KEY)) return
+    sessionStorage.setItem(SSO_AUTO_TRIED_KEY, "1")
+    setAutoStarting(true)
     beginHostedLogin().catch((err) => {
       const msg =
         err instanceof Error ? err.message : "Could not start sign-in."
+      setAutoStarting(false)
       setError(msg)
       toast.error(msg)
     })
-  }, [hostedAuth, canLogin])
+  }, [hostedAuth, canLogin, ssoRequested])
 
   const provisioning = resolution?.state === "not_ready"
   useEffect(() => {
@@ -277,7 +299,7 @@ export default function LoginPage() {
 
           {hostedAuth ? (
             <div className="space-y-5">
-              {!error && (
+              {autoStarting && !error && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Redirecting to secure sign-in…</span>

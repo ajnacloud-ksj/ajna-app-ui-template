@@ -15,7 +15,15 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const location = useLocation()
 
   if (!visitCondition) {
-    return <Navigate to={route} state={{ from: location }} replace />
+    // Preserve the query string (e.g. ?sso=1 from a portal-originated arrival)
+    // so the login page still sees it after the redirect.
+    return (
+      <Navigate
+        to={{ pathname: route, search: location.search }}
+        state={{ from: location }}
+        replace
+      />
+    )
   }
 
   return children
